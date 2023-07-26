@@ -55,12 +55,31 @@ def cell_to_xy(cell):
         raise e
 
 
-def get_headers(user_access_token):
+def get_headers(access_token):
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer {user_access_token}'
+        'Authorization': f'Bearer {access_token}'
     }
     return headers
+
+
+def write_config(key, value):
+    """
+    在配置中心对指定key写入value   TODO
+    :param key:
+    :param value:
+    :return:
+    """
+    pass
+
+
+def read_config(key):
+    """
+    从配置中心对指定key读取value  TODO
+    :param key:
+    :return:
+    """
+    return {}
 
 
 # 1. 身份验证
@@ -68,38 +87,63 @@ class Identification(object):
 
     def __init__(self, app_id=None, app_secret=None, redirect_uri=None, get_new_code=False):
         """
-        要么扫码获得code以重新获得相关token并保存XXX，要么从XXX获得user_refresh_token，以refresh所有变量
-        初次初始化要飞书授权获得code，然后在XXX保存user_refresh_token(有效期30天，过期要也要重新扫码获得code)，之后每次初始化建议直接读XXX
+        要么飞书授权获得code以重新获得相关token并保存配置中心，要么从配置中心获得user_refresh_token，以refresh所有变量
+        初次初始化要飞书授权获得code，然后在配置中心保存user_refresh_token(有效期30天，过期要重新获得code)，之后每次初始化建议直接读配置中心
+        update: 20230725
         :param app_id:
         :param app_secret:
         :param redirect_uri:
-        :param get_new_code:
+        :param get_new_code: 是否重新获得用户登录预授权码code，以重新
         """
         self.app_id = app_id if app_id else APP_ID
         self.app_secret = app_secret if app_secret else APP_SECRET
         self.api_url = 'https://open.feishu.cn/open-apis'
         self.redirect_uri = redirect_uri if redirect_uri else REDIRECT_URI
         self.headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json; charset=utf-8'
         }
         self._get_app_access_token()
+        self.headers.update({
+            'Authorization': f'Bearer {self.app_access_token}'
+        })
+        self.config_key = 'xxx'
 
         if get_new_code:
             self._get_id_url()
         else:
             # 读取TCC，获得xxx
-            config = 'xxx'
-            self.user_refresh_token = 'xxx'
-            self.user_refresh_token_expiration = int('xxx')
-            code_times = int('xxx') + 1
-            self.refresh_user_access_token(code_times)  # 重新生成user_access_token等user_xxx变量
+            config = read_config(self.config_key)
+            self.code = config['code']
+            self.user_refresh_token = config['user_refresh_token']
+            self.user_refresh_token_expire = int(config['user_refresh_token_expire'])
+            code_times = int(config['code_times']) + 1
+            self.refresh_user_access_token(code_times)        # 重新生成user_access_token等user_xxx变量
+
+    def _get_app_access_token(self):
+        """
+        1.1 获取app_access_token（企业自建应用）
+        doc: https://open.feishu.cn/document/server-docs/authentication-management/access-token/app_access_token_internal
+        update: 20230725
+        :return:
+        """
+        url = f'{self.api_url}/auth/v3/app_access_token/internal'
+        body = {
+            'app_id': self.app_id,
+            'app_secret': self.app_secret
+        }
+        resp = requests.post(url, json=body, headers=self.headers).json()
+        if resp['code'] == 0:
+            self.app_access_token = resp['app_access_token']    # app_access_token每隔一段时间会变
+            self.app_access_token_expire = int(time.time()) + resp['expire'] - 120  # 最大有效期2小时  TODO 会不会影响使用？不会，及时用app_access_token获得user_access_xxx即可
+        else:
+            logger.error(f'Get App Access Token Failed: {resp}')
 
     def _get_id_url(self):
         """
-        1.1 请求身份验证：获得用户登录预授权码code，有效期为5分钟，且只能使用一次
+        1.2 获得用户登录预授权码code: 有效期为5分钟，且只能使用一次
         该方法会返回url，用浏览器打开后返回结果，形如：{REDIRECT_URI}?code=xxx&state=test
-        :param self: 
-        :return: 
+        doc: https://open.feishu.cn/document/server-docs/authentication-management/login-state-management/obtain-code
+        update: 20230725
         """
         body = {
             'redirect_uri': self.redirect_uri,
@@ -108,60 +152,27 @@ class Identification(object):
         }
         self.id_url = f'{self.api_url}/authen/v1/index?{urlencode(body)}'
         print(f'请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：{self.id_url}')
+        logger.info(f'请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：{self.id_url}')
 
     def init_with_code(self, code):
         """
         使用用户登录预授权码code进行初始化
+        update: 20230725
         :param code:
         :return:
         """
         self.code = code
         self._get_user_info()
 
-    def _get_app_access_token(self):
-        """
-        1.2 获取app_access_token（企业自建应用）
-        :return:
-        """
-        url = f'{self.api_url}/auth/v3/app_access_token/internal/'
-        body = {
-            'app_id': self.app_id,
-            'app_secret': self.app_secret
-        }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            self.app_access_token = resp['app_access_token']    # app_access_token每隔一段时间会变
-        else:
-            logger.error(f'Get App Access Token Failed: {resp}')
-
-    def _update_token(self, code_times=0):
-        """
-        修改XXX里保存的token和expiration
-        :param code_times:
-        :return:
-        """
-        values = {
-            'app_access_token': self.app_access_token,
-            'user_access_token': self.user_access_token,
-            'user_access_token_expiration': self.user_access_token_expiration,
-            'user_refresh_token': self.user_refresh_token,
-            'user_refresh_token_expiration': self.user_refresh_token_expiration,
-            'user_open_id': self.user_open_id,
-            'user_name': self.user_name,
-            'time': time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),  # 北京时区 - 8个小时
-            'code_times': code_times        # 基于最近1次code，refresh tokens的次数
-        }
-        # 保存到XXX里   TODO
-        print(values)
-
     def _get_user_info(self):
         """
-        1.3 获取登录用户身份 1.1 + 1.2 -> 1.3
+        1.3 获取user_access_token
+        doc: https://open.feishu.cn/document/server-docs/authentication-management/access-token/create-2
+        update: 20230725
         :return:
         """
         url = f'{self.api_url}/authen/v1/access_token'
         body = {
-            'app_access_token': self.app_access_token,
             'grant_type': 'authorization_code',
             'code': self.code
         }
@@ -169,32 +180,56 @@ class Identification(object):
         if resp['code'] == 0:
             data = resp['data']
             self.user_access_token = data['access_token']
-            self.user_access_token_expiration = int(time.time()) + data['expires_in'] - 120     # 提前2分钟，下同
-            self.user_refresh_token = data['refresh_token']     # 有效期30天
-            self.user_refresh_token_expiration = int(time.time()) + data['refresh_expires_in'] - 120
+            self.user_access_token_expire = int(time.time()) + data['expires_in'] - 120     # 提前2分钟，下同
+            self.user_refresh_token = data['refresh_token']                                 # 有效期30天
+            self.user_refresh_token_expire = int(time.time()) + data['refresh_expires_in'] - 120
             self.user_open_id = data['open_id']
+            # self.user_id = data['user_id']
             self.user_name = data['name']
+            self.user_en_name = data['en_name']
+            # self.user_email = data['email']
             self._update_token(0)
         else:
-            logger.error(f'Get User Info Failed: {resp}')
+            print(f'Get User Info Failed: {resp}')
 
-    def _if_user_access_token_expired(self):
+    def _update_token(self, code_times=0):
         """
-        判断是否需要更新user_access_token  user_access_token有效期约6900秒（约1.9小时），user_refresh_token有效期约30天
+        修改XXX里保存的token和expiration
+        update: 20230725
+        :param code_times:
         :return:
         """
-        return int(time.time()) >= self.user_access_token_expiration
+        values = {
+            'app_access_token': self.app_access_token,
+            'app_access_token_expire': self.app_access_token_expire,
+            'user_access_token': self.user_access_token,
+            'user_access_token_expire': self.user_access_token_expire,
+            'user_refresh_token': self.user_refresh_token,
+            'user_refresh_token_expire': self.user_refresh_token_expire,
+            'user_open_id': self.user_open_id,
+            # 'user_id': self.user_id,
+            'user_name': self.user_name,
+            'user_en_name': self.user_en_name,
+            # 'user_email': self.user_email,
+            'time': time.strftime('%Y%m%d %H:%M:%S', time.localtime()),  # 北京时区
+            'code': self.code,
+            'code_times': code_times        # 基于最近1次code，refresh tokens的次数
+        }
+        print(f'往配置中心写入配置：config_key={self.config_key}, config_value=\n{values}')
+        logger.info(f'往配置中心写入配置：config_key={self.config_key}, config_value=\n{values}')
+        write_config(self.config_key, values)
 
     def refresh_user_access_token(self, code_times):
         """
         1.4 刷新user_access_token   基于user_refresh_token获得新的user_access_token和user_refresh_token
+        doc: https://open.feishu.cn/document/server-docs/authentication-management/access-token/create
+        update: 20230725
         :param code_times:
         :return:
         """
-        assert int(time.time()) < self.user_refresh_token_expiration, 'user_refresh_token已过期，无法refresh，需要重新生成'
+        assert int(time.time()) < self.user_refresh_token_expire, 'user_refresh_token已过期，无法refresh，需要重新生成'
         url = f'{self.api_url}/authen/v1/refresh_access_token'
         body = {
-            'app_access_token': self.app_access_token,
             'grant_type': 'refresh_token',
             'refresh_token': self.user_refresh_token
         }
@@ -202,11 +237,14 @@ class Identification(object):
         if resp['code'] == 0:
             data = resp['data']
             self.user_access_token = data['access_token']
-            self.user_access_token_expiration = int(time.time()) + data['expires_in'] - 120  # 提前2分钟，下同
-            self.user_refresh_token = data['refresh_token']  # 有效期30天
-            self.user_refresh_token_expiration = int(time.time()) + data['refresh_expires_in'] - 120
+            self.user_access_token_expire = int(time.time()) + data['expires_in'] - 120     # 提前2分钟，下同
+            self.user_refresh_token = data['refresh_token']                                 # 有效期30天
+            self.user_refresh_token_expire = int(time.time()) + data['refresh_expires_in'] - 120
             self.user_open_id = data['open_id']
+            # self.user_id = data['user_id']
             self.user_name = data['name']
+            self.user_en_name = data['user_en_name']
+            # self.user_email = data['email']
             self._update_token(code_times)
         else:
             logger.error(f'Refresh User Access Token Failed: {resp}')
@@ -216,13 +254,18 @@ class Identification(object):
 
     def get_user_info_identification(self):
         """
-        1.5 获取用户信息（身份验证）
+        1.5 获取登录用户信息
+        doc: https://open.feishu.cn/document/server-docs/authentication-management/login-state-management/get
+        update: 20230725
         :return:
         """
         headers = get_headers(self.user_access_token)
         url = f'{self.api_url}/authen/v1/user_info'
         resp = requests.get(url, headers=headers).json()
-        return resp
+        if resp['code'] == 0:
+            return resp['data']
+        else:
+            logger.error(f'Get User Info Failed: {resp}')
 
 
 # 2. Folder
@@ -255,70 +298,65 @@ def add_permission(file_token, file_type, user_access_token, openids=[], emails=
 
 # 5. Doc
 # 6. Sheets
-class SpreedSheet(object):
+class SpreadSheet(object):
     """
-    操作SpreedSheet，暂时只需关注write_df(df写入sheet)和read_sheet(读取sheet为df)这2个API
+    操作SpreadSheet，暂时只需关注write_df(df写入sheet)和read_sheet(读取sheet为df)这2个API
     """
-    def __init__(self, spreedsheet_token=None, user_access_token=None):
+    def __init__(self, spreadsheet_token=None, user_access_token=None):
         """
-        若1个文档要操作多次，建议为其专门初始化一个实例(在初始化时指定spreedsheet_token)
-        若有多个文档，每个文档只操作一两次，建议先初始化1个公共实例，在操作具体每个文档时再指定spreedsheet_token
-        :param spreedsheet_token:
+        若1个文档要操作多次，建议为其专门初始化一个实例(在初始化时指定spreadsheet_token)
+        若有多个文档，每个文档只操作一两次，建议先初始化1个公共实例，在操作具体每个文档时再指定spreadsheet_token
+        :param spreadsheet_token:
         :param user_access_token:
         """
         if user_access_token is None:
             self.idt = Identification()
             user_access_token = self.idt.user_access_token
-        self._refresh_user_access_token(user_access_token)
-        if spreedsheet_token:
-            self._set_spreedsheet_token(spreedsheet_token)
-
-    def _refresh_user_access_token(self, user_access_token):
-        """
-        使用user_access_token初始化或更新headers
-        :param user_access_token:
-        :return:
-        """
         self.user_access_token = user_access_token
         self.headers = get_headers(self.user_access_token)
+        if spreadsheet_token:
+            self._set_spreadsheet_token(spreadsheet_token)
 
-    def _set_spreedsheet_token(self, spreedsheet_token):
+    def _set_spreadsheet_token(self, spreadsheet_token):
         """
-        设置或修改spreedsheet_token
-        :param spreedsheet_token:
+        设置或修改spreadsheet_token
+        :param spreadsheet_token:
         :return:
         """
-        self.spreedsheet_token = spreedsheet_token
-        self.api_url = f'https://open.feishu.cn/open-apis/sheet/v2/spreedsheets/{spreedsheet_token}'
+        self.spreadsheet_token = spreadsheet_token
+        self.api_url = f'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/{spreadsheet_token}'   # TODO 并不通用！！
         self._update_meta_info()
-
 
     def _update_meta_info(self):
         """
-        更新表格元数据
-        sheets = {
-            0: {
-                "sheetId": "***",
-                "title": "***",
-                "index": 0,
-                "rowCount": 0,
-                'columnCount": 0
-            },
-            1: {}
-        }
-        :return:
+        获取并更新表格元数据
+        获取表格信息:   https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet/get
+        获取sheet信息: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/query
+        update: 20230725
         """
-        url = f'{self.api_url}/metainfo'
+        url = f'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/{self.spreadsheet_token}'
         resp = requests.get(url, headers=self.headers).json()
         if resp['code'] == 0:
-            data = resp['data']
-            self.title = data['properties']['title']
-            self.sheets = {x['index']: x for x in data['sheets']}
-            self.sheet_index2id = {val['index']: val['sheetId'] for key, val in self.sheets.items()}
-            self.sheet_title2id = {val['title']: val['sheetId'] for key, val in self.sheets.items()}
+            SpreadSheet = resp['data']['spreadsheet']
+            self.title = SpreadSheet['title']
+            self.owner_id = SpreadSheet['owner_id']
+            self.SpreadSheet_url = SpreadSheet['url']
+        else:
+            logger.error(f'Get SpreadSheet Meta Info Failed: {resp}')
+            return
+
+        url += '/sheets/query'
+        resp = requests.get(url, headers=self.headers).json()
+        if resp['code'] == 0:
+            sheets = resp['data']['sheets']
+            self.sheets = {x['index']: x for x in sheets}
+            self.sheet_index2id = {val['index']: val['sheet_id'] for key, val in self.sheets.items()}
+            self.sheet_title2id = {val['title']: val['sheet_id'] for key, val in self.sheets.items()}
             self.sheet_id2index = {val: key for key, val in self.sheet_index2id.items()}
         else:
-            logger.error(f'Get Meta Info Failed: {resp}')
+            logger.error(f'Get SpreadSheet Sheets Meta Info Failed: {resp}')
+
+    # TODO 下次从这里开始！
 
     def _change_title(self, title):
         """
@@ -627,14 +665,14 @@ class SpreedSheet(object):
             logger.error(f'Read Ranges Failed: {resp}')
             return None
 
-    def write_df(self, df, spreedsheet_token=None, sheet=0, cell_start='A1', xy_start=None, max_num=1000, update=True):
+    def write_df(self, df, spreadsheet_token=None, sheet=0, cell_start='A1', xy_start=None, max_num=1000, update=True):
         """
         调用append_data，把DataFrame写入sheet，从cell_start开始写(append)，返回下一个可用的cell
         TODO 暂时不支持包含nan、List的df，需要提前处理nan！
         TODO email等复杂类型的df
         TODO 图片呢？
         :param df:
-        :param spreedsheet_token:
+        :param spreadsheet_token:
         :param sheet:
         :param cell_start:
         :param xy_start:
@@ -642,10 +680,10 @@ class SpreedSheet(object):
         :param update:
         :return:
         """
-        if spreedsheet_token:
-            self._set_spreedsheet_token(spreedsheet_token)
+        if spreadsheet_token:
+            self._set_spreadsheet_token(spreadsheet_token)
         else:
-            assert self.spreedsheet_token is not None, '暂无spreedsheet_token，需要指定！'
+            assert self.spreadsheet_token is not None, '暂无spreadsheet_token，需要指定！'
             self._update_meta_info()        # 写之前先更新一下最新信息，因为sheet可能刚更新，如新增sheet等
 
         if xy_start:
@@ -680,12 +718,12 @@ class SpreedSheet(object):
         logger.info(f'下次write_df，请从cell_start={cell_start}开始')
         return cell_start
 
-    def read_sheet(self, spreedsheet_token=None, sheet=0, cell_start='A1', cell_end=None,
+    def read_sheet(self, spreadsheet_token=None, sheet=0, cell_start='A1', cell_end=None,
                    xy_start=(0, 0), xy_end=None, has_cols=True, col_names=None, max_num=1000):
         """
         调用read_range，读取某sheet中某区域的数据，可指定cell_start到cell_end，或xy_start到xy_end
         没指定区域的话，可自行判断所有有效区域，建议明确指定起始cell，尤其是cell_end
-        :param spreedsheet_token:
+        :param spreadsheet_token:
         :param sheet:
         :param cell_start:
         :param cell_end:
@@ -696,10 +734,10 @@ class SpreedSheet(object):
         :param max_num:
         :return:
         """
-        if spreedsheet_token:
-            self._set_spreedsheet_token(spreedsheet_token)
+        if spreadsheet_token:
+            self._set_spreadsheet_token(spreadsheet_token)
         else:
-            assert self.spreedsheet_token is not None, '暂无spreedsheet_token，需要指定！'
+            assert self.spreadsheet_token is not None, '暂无spreadsheet_token，需要指定！'
             self._update_meta_info()        # 读之前先更新一下最新信息，因为sheet可能刚更新，如写入数据、新增sheet等
 
         if cell_end:                        # 若指定了cell_end，则优先使用cell_start和cell_end
@@ -776,25 +814,25 @@ if __name__ == '__main__':
 
     # 首次使用，需要先初始化
     idt = Identification(get_new_code=True)
-    code = 'd97lf74209014bfdac779b881cd6f879'
+    code = 'xxx'
     idt.init_with_code(code)
 
     # 简单demo
-    spsh = SpreedSheet()
-    df = spsh.read_sheet(spreedsheet_token='xxx', sheet='Sheet1', cell_start='B1', cell_end='F501')     # 读取sheet
-    spsh.write_df(df, spreedsheet_token='xxx', sheet='sheet2', cell_start='D1')                         # 写入sheet
+    spsh = SpreadSheet()
+    df = spsh.read_sheet(spreadsheet_token='xxx', sheet='Sheet1', cell_start='B1', cell_end='F501')     # 读取sheet
+    spsh.write_df(df, spreadsheet_token='xxx', sheet='sheet2', cell_start='D1')                         # 写入sheet
 
     # 复杂demo:
     # demo1: 连续写入同一个sheet
-    spsh = SpreedSheet()
+    spsh = SpreadSheet()
     res = {'model1': None, 'model2': None}
     cell_start = 'A1'
     for col, metric in res.items():
         metric['model'] = [col] * metric.shape[0]
-        cell_start = spsh.write_df(metric, spreedsheet_token='xxx', sheet='xxx', cell_start=cell_start)
+        cell_start = spsh.write_df(metric, spreadsheet_token='xxx', sheet='xxx', cell_start=cell_start)
         # 若有需要，可更新cell_start，比如每隔2行写入一份数据，则修改cell_start: A200 -> A202
         # 其实下面这样也行，但返回值一直是第1次写入时的cell_start(???)，不优雅，无法准确得知下一行可以写入的行号
-        # spsh.write_df(metric, spreedsheet_token='xxx', sheet='xxx')
+        # spsh.write_df(metric, spreadsheet_token='xxx', sheet='xxx')
 
     # demo2: 在现有sheet数据上，单独添加一列或多列，比如从N1位置向右添加一列或多列   注意：只有1列时，df一定要使用2层中括号！
-    spsh.write_df(df['score1', 'score2'], spreedsheet_token='xxx', sheet='xxx', cell_start='N1')
+    spsh.write_df(df['score1', 'score2'], spreadsheet_token='xxx', sheet='xxx', cell_start='N1')
