@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 # 0. Common
-APP_ID = os.environ.get('FEISHU_API_ID', None)
-APP_SECRET = os.environ.get('FEISHU_API_SECRET', None)
+APP_ID = os.environ.get('FEISHU_APP_ID', None)
+APP_SECRET = os.environ.get('FEISHU_APP_SECRET', None)
 REDIRECT_URI = os.environ.get('FEISHU_REDIRECT_URI', None)
 
 ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -119,6 +119,7 @@ class Identification(object):
             code_times = int(config['code_times']) + 1
             self.refresh_user_access_token(code_times)        # 重新生成user_access_token等user_xxx变量
 
+
     def _get_app_access_token(self):
         """
         1.1 获取app_access_token（企业自建应用）
@@ -138,6 +139,7 @@ class Identification(object):
         else:
             logger.error(f'Get App Access Token Failed: {resp}')
 
+
     def _get_id_url(self):
         """
         1.2 获得用户登录预授权码code: 有效期为5分钟，且只能使用一次
@@ -154,6 +156,7 @@ class Identification(object):
         print(f'请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：{self.id_url}')
         logger.info(f'请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：{self.id_url}')
 
+
     def init_with_code(self, code):
         """
         使用用户登录预授权码code进行初始化
@@ -163,6 +166,7 @@ class Identification(object):
         """
         self.code = code
         self._get_user_info()
+
 
     def _get_user_info(self):
         """
@@ -192,6 +196,7 @@ class Identification(object):
         else:
             print(f'Get User Info Failed: {resp}')
 
+
     def _update_token(self, code_times=0):
         """
         修改XXX里保存的token和expiration
@@ -218,6 +223,7 @@ class Identification(object):
         print(f'往配置中心写入配置：config_key={self.config_key}, config_value=\n{values}')
         logger.info(f'往配置中心写入配置：config_key={self.config_key}, config_value=\n{values}')
         write_config(self.config_key, values)
+
 
     def refresh_user_access_token(self, code_times):
         """
@@ -251,6 +257,7 @@ class Identification(object):
 
     # 错误码code含义：
     # 20007: 生成access_token失败，请确保code没有重复消费或过期消费
+
 
     def get_user_info_identification(self):
         """
@@ -317,6 +324,7 @@ class SpreadSheet(object):
         if spreadsheet_token:
             self._set_spreadsheet_token(spreadsheet_token)
 
+
     def _set_spreadsheet_token(self, spreadsheet_token):
         """
         设置或修改spreadsheet_token
@@ -325,7 +333,9 @@ class SpreadSheet(object):
         """
         self.spreadsheet_token = spreadsheet_token
         self.api_url = f'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/{spreadsheet_token}'   # TODO 并不通用！！
+        self.api_url_v2 = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}'
         self._update_meta_info()
+
 
     def _update_meta_info(self):
         """
@@ -334,18 +344,18 @@ class SpreadSheet(object):
         获取sheet信息: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/query
         update: 20230725
         """
-        url = f'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/{self.spreadsheet_token}'
+        url = self.api_url
         resp = requests.get(url, headers=self.headers).json()
         if resp['code'] == 0:
-            SpreadSheet = resp['data']['spreadsheet']
-            self.title = SpreadSheet['title']
-            self.owner_id = SpreadSheet['owner_id']
-            self.SpreadSheet_url = SpreadSheet['url']
+            spreadsheet = resp['data']['spreadsheet']
+            self.title = spreadsheet['title']
+            self.owner_id = spreadsheet['owner_id']
+            self.spreadsheet_url = spreadsheet['url']
         else:
             logger.error(f'Get SpreadSheet Meta Info Failed: {resp}')
             return
 
-        url += '/sheets/query'
+        url = f'{self.api_url}/sheets/query'
         resp = requests.get(url, headers=self.headers).json()
         if resp['code'] == 0:
             sheets = resp['data']['sheets']
@@ -356,33 +366,70 @@ class SpreadSheet(object):
         else:
             logger.error(f'Get SpreadSheet Sheets Meta Info Failed: {resp}')
 
-    # TODO 下次从这里开始！
 
     def _change_title(self, title):
         """
         修改表格title
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet/patch
+        update: 20230726
         :param title:
         :return:
         """
-        url = f'{self.api_url}/properties'
+        url = self.api_url
         body = {
-            'properties': {
-                'title': title
-            }
+            'title': title
         }
-        resp = requests.put(url, json=body, headers=self.headers).json()
+        resp = requests.patch(url, json=body, headers=self.headers).json()
         if resp['code'] == 0:
             self.title = title
         return resp
 
+
+    def create_spreadsheet(self, folder_token, title=None):
+        """
+        创建表格
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet/create
+        update: 20230726
+        :param folder_token:
+        :param title:
+        :return:
+        """
+        url = 'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets'
+        body = {
+            'title': title,
+            'folder_token': folder_token
+        }
+        resp = requests.post(url, json=body, headers=self.headers).json()
+        if resp['code'] == 0:
+            spreadsheet = resp['data']['spreadsheet']
+            self.folder_token = spreadsheet['folder_token']
+            self._set_spreadsheet_token(spreadsheet['spreadsheet_token'])
+        else:
+            logger.error(f'Add SpreadSheet Failed: {resp}')
+
+
+    def _query_sheet(self, sheet):
+        """
+        查询sheet
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/get
+        update: 20230726
+        :param sheet:
+        :return:
+        """
+        sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
+        return self.sheets[sheet_id]
+
+
     def _add_sheet(self, title, index=0):
         """
         添加sheet
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/operate-sheets
+        update: 20230726
         :param title:
         :param index:
         :return:
         """
-        url = f'{self.api_url}/sheets_batch_update'
+        url = f'{self.api_url_v2}/sheets_batch_update'      # 其他url是v3，它是v2
         body = {
             'requests': [{
                 'addSheet': {
@@ -397,22 +444,25 @@ class SpreadSheet(object):
         if resp['code'] == 0:
             self._update_meta_info()
             properties = list(resp['data']['replies'][0].values())[0]['properties']
-            sheet_id, index = properties['sheetId'], properties['index']
+            sheet_id, title, index = properties['sheetId'], properties['title'], properties['index']
             logger.info(f'Add Sheet Successfully: index={index}, sheet_id={sheet_id}, title={title}')
             return sheet_id, index
         else:
             logger.error(f'Add Sheet Failed: {resp}')
             return None, None
 
+
     def _copy_sheet(self, title, sheet=0):
         """
         复制sheet
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/operate-sheets
+        update: 20230726
         :param title:
         :param sheet:
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/sheets_batch_update'
+        url = f'{self.api_url_v2}/sheets_batch_update'      # 其他url是v3，它是v2
         body = {
             'requests': [{
                 'copySheet': {
@@ -436,14 +486,17 @@ class SpreadSheet(object):
             logger.error(f'Copy Sheet Failed: {resp}')
             return None, None
 
+
     def _delete_sheet(self, sheet=0):
         """
         删除sheet
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/operate-sheets
+        update: 20230726
         :param sheet:
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/sheets_batch_update'
+        url = f'{self.api_url_v2}/sheets_batch_update'      # 其他url是v3，它是v2
         body = {
             'requests': [{
                 'deleteSheet': {
@@ -461,9 +514,12 @@ class SpreadSheet(object):
         else:
             logger.error(f'Delete Sheet Failed: {resp}')
 
-    def _change_sheet_metainfo(self, sheet, title=None, index=None, hidden=None, lock=None, users=None):
+
+    def _change_sheet(self, sheet, title=None, index=None, hidden=None, lock=None, users=None):
         """
         更新sheet属性：更新标题，移动index，隐藏sheet，锁定sheet
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/update-sheet-properties
+        update: 20230726
         :param sheet:
         :param title:
         :param index:
@@ -473,7 +529,7 @@ class SpreadSheet(object):
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/sheets_batch_update'
+        url = f'{self.api_url_v2}/sheets_batch_update'      # 其他url是v3，它是v2
         properties = {'sheetId': sheet_id}
         if title:
             properties.update({'title': title})
@@ -484,7 +540,7 @@ class SpreadSheet(object):
         if lock:
             properties.update({'protect': {'lock': lock}})
             if users:
-                properties.update({'protect': {'lock': lock, 'userIds': users}})
+                properties.update({'protect': {'lock': lock, 'userIDs': users}})
         body = {
             'requests': [{
                 'updateSheet': {
@@ -500,27 +556,8 @@ class SpreadSheet(object):
         else:
             logger.error(f'Change Sheet Meta Info Failed: {resp}')
 
-    def _merge_cells(self, cell_start, cell_end, sheet=0, merge_type='MERGE_ALL'):
-        """
-        合并cells，取值为最左上角cell的值
-        :param cell_start:
-        :param cell_end:
-        :param sheet:
-        :param merge_type: MERGE_ALL=区域直接合并，MERGE_ROWS=区域内按行合并，MERGE_COLUMNS=区域内按列合并
-        :return:
-        """
-        sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/merge_cells'
-        body = {
-            'range': f'{sheet_id}|{cell_start}:{cell_end}',
-            'mergeType': merge_type
-        }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            self._update_meta_info()
-            logger.info(f'Merge Cells Successfully: sheet_range={sheet_id}|{cell_start}:{cell_end}')
-        else:
-            logger.error(f'Merge Cells Failed: {resp}')
+    # TODO 看到这里
+
 
     def _prepend_data(self, cell_start, cell_end, values, sheet=0, update=True):
         """
@@ -615,12 +652,6 @@ class SpreadSheet(object):
         else:
             logger.error(f'Write Data Failed: {resp}')
 
-    def _write_ranges(self):
-        """
-        向多个range范围写入或覆写数据
-        :return:
-        """
-        raise NotImplementedError
 
     def _read_range(self, cell_start, cell_end, sheet=0):
         """
