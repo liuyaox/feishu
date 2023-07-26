@@ -1,3 +1,4 @@
+import os
 from urllib.parse import urlencode
 import requests
 import logging
@@ -10,10 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 # 0. Common
-APP_ID = 'xxx'
-APP_SECRET = 'xxx'
-REDIRECT_URI = 'xxx'
-
+APP_ID = os.environ.get('FEISHU_API_ID', None)
+APP_SECRET = os.environ.get('FEISHU_API_SECRET', None)
+REDIRECT_URI = os.environ.get('FEISHU_REDIRECT_URI', None)
 
 ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 PATTERN = re.compile(r'([a-zA-Z]+)(\d+)')   # 拆分字母和数字
