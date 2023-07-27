@@ -332,8 +332,8 @@ class SpreadSheet(object):
         :return:
         """
         self.spreadsheet_token = spreadsheet_token
-        self.api_url = f'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/{spreadsheet_token}'   # TODO 并不通用！！
         self.api_url_v2 = f'https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}'
+        self.api_url_v3 = f'https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/{spreadsheet_token}'
         self._update_meta_info()
 
 
@@ -344,7 +344,7 @@ class SpreadSheet(object):
         获取sheet信息: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/query
         update: 20230725
         """
-        url = self.api_url
+        url = self.api_url_v3
         resp = requests.get(url, headers=self.headers).json()
         if resp['code'] == 0:
             spreadsheet = resp['data']['spreadsheet']
@@ -355,7 +355,7 @@ class SpreadSheet(object):
             logger.error(f'Get SpreadSheet Meta Info Failed: {resp}')
             return
 
-        url = f'{self.api_url}/sheets/query'
+        url = f'{self.api_url_v3}/sheets/query'
         resp = requests.get(url, headers=self.headers).json()
         if resp['code'] == 0:
             sheets = resp['data']['sheets']
@@ -375,7 +375,7 @@ class SpreadSheet(object):
         :param title:
         :return:
         """
-        url = self.api_url
+        url = self.api_url_v3
         body = {
             'title': title
         }
@@ -556,13 +556,12 @@ class SpreadSheet(object):
         else:
             logger.error(f'Change Sheet Meta Info Failed: {resp}')
 
-    # TODO 看到这里
-
 
     def _prepend_data(self, cell_start, cell_end, values, sheet=0, update=True):
         """
-        在范围range(cell_start到cell_end)内，前插数据：其他数据下移(注意并非右移)，相当于excel中在range上界处向上插入n行
-        前插的数据的长和宽应该<=range的长和宽，单次写入不超过5000行和100列
+        在范围range(cell_start到cell_end)内，前插数据：其他数据下移(并非右移)，相当于excel中在range上界处向上插入n行
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/prepend-data
+        update: 20230727
         :param cell_start:
         :param cell_end:
         :param values:
@@ -571,10 +570,10 @@ class SpreadSheet(object):
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/values_prepend'
+        url = f'{self.api_url_v2}/values_prepend'
         body = {
             'valueRange': {
-                'range': f'{sheet_id}|{cell_start}:{cell_end}',
+                'range': f'{sheet_id}!{cell_start}:{cell_end}',
                 'values': values
             }
         }
@@ -583,49 +582,58 @@ class SpreadSheet(object):
             if update:
                 self._update_meta_info()
             data = resp['data']
-            table_range, updates = data['tableRange'], data['updates']
+            table_range, revision, updates = data['tableRange'], data['revision'], data['updates']
             range, cells = updates['updatedRange'], updates['updatedCells']
             rows, columns = updates['updatedRows'], updates['updatedColumns']
-            logger.info(f'Prepend Data Successfully: range={range}, rows={rows}, columns={columns}, cells={cells}')
+            logger.info(f'Prepend Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+            return range
         else:
             logger.error(f'Prepend Data Failed: {resp}')
 
+
     def _append_data(self, cell_start, cell_end, values, sheet=0, option='OVERWRITE', update=True):
         """
-        在范围range内或后面，追加数据：从range内或后面第1个空行，开始覆写各行，相当于excel中在第1个空行处粘贴n行（会覆盖后面已有数据？）
-        单次写入不超过5000行和100列
+        在范围range内或后，追加数据：从range起始行列开始向下寻找第1个空白位置，向下写入数据，相当于excel中在第1个空行处粘贴n行（覆盖或插入）
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/append-data
+        update: 20230727
         :param cell_start:
         :param cell_end:
         :param values:
         :param sheet:
-        :param option:
+        :param option: OVERWRITE会直接覆盖下面的数据，INSERT_ROWS会先在第1个空白位置后插入足够行后再写入数据，不会覆盖下面已有的数据。
         :param update:
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/values_append'
-        body = {
+        url = f'{self.api_url_v2}/values_append'
+        params = {
             'insertDataOption': option,
+        }
+        body = {
             'valueRange': {
-                'range': f'{sheet_id}|{cell_start}:{cell_end}',
+                'range': f'{sheet_id}!{cell_start}:{cell_end}',
                 'values': values
             }
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
+        resp = requests.post(url, params=params, json=body, headers=self.headers).json()
         if resp['code'] == 0:
             if update:
                 self._update_meta_info()
             data = resp['data']
-            table_range, updates = data['tableRange'], data['updates']
+            table_range, revision, updates = data['tableRange'], data['revision'], data['updates']
             range, cells = updates['updatedRange'], updates['updatedCells']
             rows, columns = updates['updatedRows'], updates['updatedColumns']
-            logger.info(f'Append Data Successfully: range={range}, rows={rows}, columns={columns}, cells={cells}')
+            logger.info(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+            return range
         else:
             logger.error(f'Append Data Failed: {resp}')
 
+
     def _write_range(self, cell_start, cell_end, values, sheet=0, update=True):
         """
-        向单个range范围写入或覆写数据
+        向单个range范围写入数据，若范围内有数据，会被更新覆写
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/write-data-to-a-single-range
+        update: 20230727
         :param cell_start:
         :param cell_end:
         :param values:
@@ -634,21 +642,22 @@ class SpreadSheet(object):
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/values'
+        url = f'{self.api_url_v2}/values'
         body = {
             'valueRange': {
-                'range': f'{sheet_id}|{cell_start}:{cell_end}',
+                'range': f'{sheet_id}!{cell_start}:{cell_end}',
                 'values': values
             }
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
+        resp = requests.put(url, json=body, headers=self.headers).json()
         if resp['code'] == 0:
             if update:
                 self._update_meta_info()
             data = resp['data']
             range, cells = data['updatedRange'], data['updatedCells']
             rows, columns = data['updatedRows'], data['updatedColumns']
-            logger.info(f'Write Data Successfully: range={range}, rows={rows}, columns={columns}, cells={cells}')
+            logger.info(f'Write Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+            return range
         else:
             logger.error(f'Write Data Failed: {resp}')
 
@@ -656,17 +665,20 @@ class SpreadSheet(object):
     def _read_range(self, cell_start, cell_end, sheet=0):
         """
         读取单个range范围：返回数据限制为10M
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/reading-a-single-range
+        update: 20230727
         :param cell_start:
         :param cell_end:
         :param sheet:
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/values/{sheet_id}|{cell_start}:{cell_end}'
+        url = f'{self.api_url_v2}/values/{sheet_id}!{cell_start}:{cell_end}'
         params = {
-            'valueRenderOption': 'ToString'     # 先ToString再读取，否则对于包含url的cell，会按FormattedValue来读取 TODO
+            'valueRenderOption': 'ToString',            # 先ToString再读取，否则对于包含url的cell，会按FormattedValue来读取?
+            'dateTimeRenderOption': 'FormattedString'
         }
-        resp = requests.post(url, params=params, headers=self.headers).json()
+        resp = requests.get(url, params=params, headers=self.headers).json()
         if resp['code'] == 0:
             values = resp['data']['valueRange']['values']
             return values
@@ -674,31 +686,65 @@ class SpreadSheet(object):
             logger.error(f'Read Range Failed: {resp}')
             return None
 
+
     def _read_ranges(self, cells, sheet=0):
         """
-        读取多个range范围  cells=[{cell_start, cell_end), (), ...]
-        :param cells:
+        读取多个range范围
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/reading-multiple-ranges
+        update: 20230727
+        :param cells: 形如[{cell_start, cell_end), (), ...]
         :param sheet:
         :return:
         """
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
-        url = f'{self.api_url}/values_batch_get'
-        url += '?ranges=' + ','.join([f'{sheet_id}|{x[0]}:{x[1]}' for x in cells])
+        url = f'{self.api_url_v2}/values_batch_get'
         params = {
-            'valueRenderOption': 'ToString'
+            'ranges': ','.join([f'{sheet_id}!{x[0]}:{x[1]}' for x in cells]),
+            'valueRenderOption': 'ToString',
+            'dateTimeRenderOption': 'FormattedString'
         }
-        resp = requests.post(url, params=params, headers=self.headers).json()
+        resp = requests.get(url, params=params, headers=self.headers).json()
         if resp['code'] == 0:
-            value_range = resp['data']['valueRange']
-            range2values = {x['range']: x['values'] for x in value_range}
+            data = resp['data']
+            value_ranges, total_cells = data['valueRange'], data['totalCells']
+            range2values = {x['range']: x['values'] for x in value_ranges}
             return range2values
         else:
             logger.error(f'Read Ranges Failed: {resp}')
             return None
 
+
+    def _write_image(self, cell, image, name, sheet=0, update=True):
+        """
+        向一个cell写入一张图片
+        doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/data-operation/write-images
+        update: 20230727
+        :param cell: 一个cell，比如'B3'
+        :param image: array<byte>，图片二进制流，支持PNG, JPEG, JPG, GIF, BMP, JFIF, EXIF, TIFF, BPG, WEBP, HEIC等格式
+        :param name:
+        :param update:
+        :return:
+        """
+        sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
+        url = f'{self.api_url_v2}/values_image'
+        body = {
+            'range': f'{sheet_id}!{cell}:{cell}',
+            'image': image,
+            'name': name
+        }
+        resp = requests.post(url, json=body, headers=self.headers).json()
+        if resp['code'] == 0:
+            if update:
+                self._update_meta_info()
+            range = resp['data']['updateRange']
+            return range
+        else:
+            logger.error(f'Write Image Failed: {resp}')
+
+
     def write_df(self, df, spreadsheet_token=None, sheet=0, cell_start='A1', xy_start=None, max_num=1000, update=True):
         """
-        调用append_data，把DataFrame写入sheet，从cell_start开始写(append)，返回下一个可用的cell
+        调用_append_data，把DataFrame写入sheet，从cell_start或xy_start开始写(append)，返回下一个可用的cell
         TODO 暂时不支持包含nan、List的df，需要提前处理nan！
         TODO email等复杂类型的df
         TODO 图片呢？
@@ -714,8 +760,8 @@ class SpreadSheet(object):
         if spreadsheet_token:
             self._set_spreadsheet_token(spreadsheet_token)
         else:
-            assert self.spreadsheet_token is not None, '暂无spreadsheet_token，需要指定！'
-            self._update_meta_info()        # 写之前先更新一下最新信息，因为sheet可能刚更新，如新增sheet等
+            assert self.spreadsheet_token is not None, '没有spreadsheet_token，需要指定！'
+            self._update_meta_info()        # 写之前先更新并获取最新信息，因为sheet可能刚更新，比如新增sheet、写入数据等
 
         if xy_start:
             cell_start = xy_to_cell(xy_start[0], xy_start[1])
@@ -733,7 +779,7 @@ class SpreadSheet(object):
             values.append(se.to_list())
             if len(values) == max_num:      # 每次只写max_num行
                 logger.info(f'Range: {cell_start}, {cell_end}')
-                self._append_data(cell_start, cell_end, values, sheet, update=False)
+                self._append_data(cell_start, cell_end, values, sheet, update=False)    # 单次写入，先不update
                 # 更新下一次的values, cell_start, cell_end, row_end
                 values = []
                 cell_start = letter_start + str(row_end + 1)
@@ -748,6 +794,7 @@ class SpreadSheet(object):
         cell_start = letter_start + str(row_end - max_num + len(values) + 1)
         logger.info(f'下次write_df，请从cell_start={cell_start}开始')
         return cell_start
+
 
     def read_sheet(self, spreadsheet_token=None, sheet=0, cell_start='A1', cell_end=None,
                    xy_start=(0, 0), xy_end=None, has_cols=True, col_names=None, max_num=1000):
