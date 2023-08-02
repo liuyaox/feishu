@@ -15,6 +15,7 @@ APP_ID = os.environ.get('FEISHU_APP_ID', None)
 APP_SECRET = os.environ.get('FEISHU_APP_SECRET', None)
 REDIRECT_URI = os.environ.get('FEISHU_REDIRECT_URI', None)
 CONFIG_KEY = os.environ.get('FEISHU_CONFIG_KEY', 'yao.liu')
+FEISHU_VERBOSE = os.environ.get('FEISHU_VERBOSE', 'identification')
 
 
 def write_config(key, value):
@@ -107,7 +108,6 @@ class Identification(object):
         }
         self.id_url = f'{self.api_url}/authen/v1/index?{urlencode(body)}'
         print(f'请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：{self.id_url}')
-        logger.info(f'请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：{self.id_url}')
 
     def init_with_code(self, code):
         """
@@ -144,6 +144,7 @@ class Identification(object):
             self.user_en_name = data['en_name']
             # self.user_email = data['email']
             self._update_token(0)
+            print(f'Get User Info Successfully! data: \n{data}')
         else:
             print(f'Get User Info Failed: {resp}')
 
@@ -170,7 +171,8 @@ class Identification(object):
             'code': self.code,
             'code_times': code_times        # 基于最近1次code，refresh tokens的次数
         }
-        print(f'往配置中心写入配置：config_key={self.config_key}, config_value=\n{values}')
+        if FEISHU_VERBOSE in ['identification', 'all']:
+            print(f'往配置中心写入配置：config_key={self.config_key}, config_value=\n{values}')
         logger.info(f'往配置中心写入配置：config_key={self.config_key}, config_value=\n{values}')
         write_config(self.config_key, values)
 

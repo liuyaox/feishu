@@ -1,3 +1,4 @@
+import os
 import requests
 import logging
 import re
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 # 0. Common
 ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 PATTERN = re.compile(r'([a-zA-Z]+)(\d+)')   # 拆分字母和数字
+FEISHU_VERBOSE = os.environ.get('FEISHU_VERBOSE', 'spreadsheet')
 
 
 def xy_to_cell(row_index, col_index):
@@ -359,7 +361,8 @@ class SpreadSheet(object):
             table_range, revision, updates = data['tableRange'], data['revision'], data['updates']
             range, cells = updates['updatedRange'], updates['updatedCells']
             rows, columns = updates['updatedRows'], updates['updatedColumns']
-            print(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+            if FEISHU_VERBOSE in ['spreadsheet', 'all']:
+                print(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
             logger.info(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
             return range
         else:
@@ -481,6 +484,42 @@ class SpreadSheet(object):
         else:
             logger.error(f'Write Image Failed: {resp}')
 
+    def write_image(self, image_paths, spreadsheet_token=None, sheet=0, cell_start='A1', axis='column', update=True):
+        """
+        调用_write_image写入图片，目前只支持写入一列或一行
+        :param image_paths: 暂时先只支持_write_image中的image_path
+        :param spreadsheet_token:
+        :param sheet:
+        :param cell_start: 从cell_start向下写入一列，或向右写入一行
+        :param axis: column表示写入一列，row表示写入一行
+        :param update:
+        :return:
+        """
+        if spreadsheet_token:
+            self._set_spreadsheet_token(spreadsheet_token)
+        else:
+            assert self.spreadsheet_token is not None, '没有spreadsheet_token，需要指定！'
+            self._update_meta_info()        # 写之前先更新并获取最新信息，因为sheet可能刚更新，比如新增sheet、写入数据等
+
+        x_start, y_start = cell_to_xy(cell_start)
+        if axis == 'column':
+            cells = [xy_to_cell(x_start + i, y_start) for i in range(len(image_paths))]
+            next_cell_start = xy_to_cell(x_start + len(image_paths), y_start)
+        elif axis == 'row':
+            cells = [xy_to_cell(x_start, y_start + i) for i in range(len(image_paths))]
+            next_cell_start = xy_to_cell(x_start, y_start + len(image_paths))
+
+        for cell, image_path in tqdm(zip(cells, image_paths)):
+            self._write_image(cell, image_path=image_path, sheet=sheet, update=False)
+        if update:
+            self._update_meta_info()  # 写完所有数据后再update
+
+        if FEISHU_VERBOSE in ['spreadsheet', 'all']:
+            print(f'下次write_image，请从cell_start={next_cell_start}开始')
+        logger.info(f'下次write_image，请从cell_start={next_cell_start}开始')
+        return next_cell_start
+
+
     def write_df(self, df, spreadsheet_token=None, sheet=0, cell_start='A1', xy_start=None, max_num=1000, update=True):
         """
         调用_append_data，把DataFrame写入sheet，从cell_start或xy_start开始写(append)，返回下一个可用的cell
@@ -531,7 +570,8 @@ class SpreadSheet(object):
             self._update_meta_info()        # 写完所有数据后再update
 
         cell_start = letter_start + str(row_end - max_num + len(values) + 1)
-        print(f'下次write_df，请从cell_start={cell_start}开始')
+        if FEISHU_VERBOSE in ['spreadsheet', 'all']:
+            print(f'下次write_df，请从cell_start={cell_start}开始')
         logger.info(f'下次write_df，请从cell_start={cell_start}开始')
         return cell_start
 
@@ -547,8 +587,8 @@ class SpreadSheet(object):
         :param cell_end:
         :param xy_start:
         :param xy_end:
-        :param has_cols: 原始数据第1行是不是列名
-        :param col_names: 原始数据第1行不是列名，指定列名为col_names
+        :param has_cols: range内第1行是不是列名
+        :param col_names: 若range第1行不是列名，指定列名为col_names
         :param max_num:
         :return:
         """
