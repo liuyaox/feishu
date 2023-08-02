@@ -61,17 +61,23 @@ idt.init_with_code(code)
 
 ![img.png](./images/img.png)
 
+备注：
+- 以下代码中的df，类型是pandas.DataFrame
+- 以下代码中的sheet，可以是sheet_id（建议这个）, sheet_title（sheet名字）或sheet_index（sheet的序号，从左到右依次是0,1,2...）
+
 ### 简单demo
 
 ```python
 from feishu import SpreadSheet
-
 spsh = SpreadSheet()
-# 注意，以下2行中，sheet可以是sheet_id（建议这个）, sheet_title 或 sheet_index
 df = spsh.read_sheet(spreadsheet_token='xxx1', sheet='xxx', cell_start='B1', cell_end='F501') # 读取sheet，范围是B1:F501
-spsh.write_df(df, spreadsheet_token='xxx2', sheet='xxx', cell_start='D1')                     # 写入sheet，从D1开始写，若cell_start若是A1，可省略
+spsh.write_df(df, spreadsheet_token='xxx2', sheet='xxx', cell_start='D1')                     # 写入sheet，从D1开始写，若cell_start是A1，可省略
+```
 
-# 操作别的文档，只需修改spreadsheet_token即可，不需要重新实例化SpreadSheet
+主要是以上4行，下面是一些补充说明：
+
+```python
+# 若要操作别的文档，只需修改spreadsheet_token，不需要重新实例化SpreadSheet
 df = spsh.read_sheet(spreadsheet_token='xxx3', sheet='xxx', cell_start='B1', cell_end='F501')
 
 # 也可在SpreadSheet实例化时指定spreadsheet_token，尤其适用于对同一文档多次操作时
