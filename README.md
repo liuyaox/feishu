@@ -40,11 +40,11 @@ idt = Identification(get_new_code=True)
 ```
 此时会输出1个url，比如：
 
-`请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：https://open.feishu.cn/open-apis/authen/v1/index?redirect_uri=https%3A%2F%2Fopen.feishu.cn%2Fdocument%2Fliuyao&app_id=xxx&state=test`
+> 请在浏览器里打开这个URL，飞书授权后获得code，随后使用code进行初始化：https://open.feishu.cn/open-apis/authen/v1/index?redirect_uri=https%3A%2F%2Fopen.feishu.cn%2Fdocument%2Fliuyao&app_id=xxx&state=test`
 
 在浏览器打开这个URL，飞书授权后，浏览器链接里可获得code(`<YOUR_CODE>`)，比如：
 
-`https://open.feishu.cn/document/liuyao?code=<YOUR_CODE>&state=test`
+> https://open.feishu.cn/document/liuyao?code=<YOUR_CODE>&state=test`
 
 继续在交互式界面执行以下命令：
 
@@ -117,7 +117,7 @@ spsh.write_image(image_paths, sheet='dzwtzZ', cell_start='F5', axis='row')  # �
 - 写入sheet时，df的cell数值类型不能是dict, list等复杂数据类型，若想写入，可以转化为str，比如`df['dic']=df['dic'].map(str)`
 - 读写文档和用户认证过程中，都会输出详细信息，若想控制，可以配置环境变量`FEISHU_VERBOSE`
     > `export FEISHU_VERBOSE='all'`表示都输出详细信息
-    >
+    > 
     > `export FEISHU_VERBOSE='spreadsheet'`表示只输出读写文档过程中的详细信息
     >
     > `export FEISHU_VERBOSE='identification'`表示只输出用户认证过程中的详细信息
