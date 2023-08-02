@@ -1,0 +1,4 @@
+opencv_python==4.8.0.74
+pandas==1.5.3
+Requests==2.31.0
+tqdm==4.65.0
