@@ -170,13 +170,13 @@ class SpreadSheet(object):
         sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
         return self.sheets[sheet_id]
 
-    def _add_sheet(self, title, index=0):
+    def _add_sheet(self, title, index=-1):
         """
         添加sheet
         doc: https://open.feishu.cn/document/server-docs/docs/sheets-v3/spreadsheet-sheet/operate-sheets
         update: 20230726
         :param title:
-        :param index:
+        :param index: 0表示添加为第1个，1表示添加为第2个，……，-2表示添加为倒数第2个，-1表示添加为最后1个
         :return:
         """
         url = f'{self.api_url_v2}/sheets_batch_update'      # 其他url是v3，它是v2
@@ -185,7 +185,7 @@ class SpreadSheet(object):
                 'addSheet': {
                     'properties': {
                         'title': title,
-                        'index': index
+                        'index': len(self.sheets) + 1 + index if index < 0 else index
                     }
                 }
             }]
