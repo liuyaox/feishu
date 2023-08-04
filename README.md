@@ -48,7 +48,7 @@ idt = Identification(get_new_code=True)
 
 继续在交互式界面执行以下命令：
 
-```python
+```python`
 code = '<YOUR_CODE>'
 idt.init_with_code(code)
 ```
@@ -93,11 +93,16 @@ from feishu import SpreadSheet
 spsh = SpreadSheet()
 
 
-# demo1: 读取sheet的范围，第一行不是列名，需要指定列名
+# demo1: 创建spreadsheet，返回字典，key分别是spreadsheet_token, spreadsheet_url, sheet_id
+# folder_token：建议先手动创建目录，然后打开目录，在url中获得folder_token，形如：https://rg975ojk5z.feishu.cn/drive/folder/<folder_token>
+spreadsheet_info = spsh.create_spreadsheet(folder_token='xxx', title='create_spreadsheet_demo')
+
+
+# demo2: 读取sheet的范围，第一行不是列名，需要指定列名
 df = spsh.read_sheet(spreadsheet_token='xxx', sheet='xxx', cell_start='B2', cell_end='C501', has_cols=False, col_names=['col1', 'col2'])     # 读取范围内(B2:C501)第1行不是列名，需要指定列名col_names
 
 
-# demo2: 连续写入同一个sheet
+# demo3: 连续写入同一个sheet
 cell_start = 'A1'
 for df in [df1, df2, df3]:
     cell_start = spsh.write_df(df, spreadsheet_token='xxx', sheet='xxx', cell_start=cell_start)
@@ -106,7 +111,7 @@ for df in [df1, df2, df3]:
     # spsh.write_df(df, spreadsheet_token='xxx', sheet='xxx')
 
     
-# demo3: 图片写入sheet
+# demo4: 图片写入sheet
 image_paths = ['test1.png', 'test2.png', 'test3.png']
 spsh.write_image(image_paths, sheet='dzwtzZ', cell_start='B2')              # 写入一列：B2到B4
 spsh.write_image(image_paths, sheet='dzwtzZ', cell_start='F5', axis='row')  # 写入一行：F5到F7

@@ -148,7 +148,14 @@ class SpreadSheet(object):
         if resp['code'] == 0:
             spreadsheet = resp['data']['spreadsheet']
             self.folder_token = spreadsheet['folder_token']
-            self._set_spreadsheet_token(spreadsheet['spreadsheet_token'])
+            spreadsheet_token = spreadsheet['spreadsheet_token']
+            spreadsheet_url = spreadsheet['url']
+            self._set_spreadsheet_token(spreadsheet_token)
+            return {
+                'spreadsheet_token': spreadsheet_token,
+                'spreadsheet_url': spreadsheet_url,
+                'sheet_token': self.sheet_index2id[0]
+            }
         else:
             logger.error(f'Add SpreadSheet Failed: {resp}')
 
