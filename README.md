@@ -1,6 +1,6 @@
 # feishu
 
-飞书文档API: 目前主要是SpreadSheet，读写飞书表格
+飞书文档Python API: 当前主要是SpreadSheet，用于读写飞书表格
 
 ## 环境配置
 
@@ -25,7 +25,7 @@ export FEISHU_CONFIG_KEY="yao.liu"    # 修改为你自己的名字
 
 以上xxx具体取值，详见文档 [feishu环境变量配置](https://rg975ojk5z.feishu.cn/docx/BLXrdah64oylNBxHieYcXKndnkd)
 
-## 初始化
+## 初始化（飞书授权并保存相关token）
 
 主要是获取自己飞书账号的授权码code，并且以此code获取自己的一系列xxx_token。
 
@@ -48,7 +48,7 @@ idt = Identification(get_new_code=True)
 
 继续在交互式界面执行以下命令：
 
-```python`
+```python（
 code = '<YOUR_CODE>'
 idt.init_with_code(code)
 ```
@@ -93,16 +93,21 @@ from feishu import SpreadSheet
 spsh = SpreadSheet()
 
 
-# demo1: 创建spreadsheet，返回字典，key分别是spreadsheet_token, spreadsheet_url, sheet_id
+# demo1: 新建spreadsheet，返回字典，key分别是spreadsheet_token, spreadsheet_url, sheet_id
 # folder_token：建议先手动创建目录，然后打开目录，在url中获得folder_token，形如：https://rg975ojk5z.feishu.cn/drive/folder/<folder_token>
 spreadsheet_info = spsh.create_spreadsheet(folder_token='xxx', title='create_spreadsheet_demo')
 
 
-# demo2: 读取sheet的范围，第一行不是列名，需要指定列名
+# demo2: 新建sheet，返回元组，分别是sheet_id和sheet_index
+spsh = SpreadSheet(spreadsheet_token='xxx')
+sheet_id, sheet_index = spsh._add_sheet(title='demo1', index=-2)    # 新建sheet，放在倒数第2位。index默认取-1，表示最后1位（从后创建sheet），也可以取0（第1位）、1、2等
+
+
+# demo3: 读取sheet的范围，第一行不是列名，需要指定列名
 df = spsh.read_sheet(spreadsheet_token='xxx', sheet='xxx', cell_start='B2', cell_end='C501', has_cols=False, col_names=['col1', 'col2'])     # 读取范围内(B2:C501)第1行不是列名，需要指定列名col_names
 
 
-# demo3: 连续写入同一个sheet
+# demo4: 连续写入同一个sheet
 cell_start = 'A1'
 for df in [df1, df2, df3]:
     cell_start = spsh.write_df(df, spreadsheet_token='xxx', sheet='xxx', cell_start=cell_start)
@@ -111,7 +116,7 @@ for df in [df1, df2, df3]:
     # spsh.write_df(df, spreadsheet_token='xxx', sheet='xxx')
 
     
-# demo4: 图片写入sheet
+# demo5: 图片写入sheet
 image_paths = ['test1.png', 'test2.png', 'test3.png']
 spsh.write_image(image_paths, sheet='dzwtzZ', cell_start='B2')              # 写入一列：B2到B4
 spsh.write_image(image_paths, sheet='dzwtzZ', cell_start='F5', axis='row')  # 写入一行：F5到F7
