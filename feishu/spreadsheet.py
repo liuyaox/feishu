@@ -58,7 +58,7 @@ class SpreadSheet(object):
     """
     操作SpreadSheet，暂时只需关注write_df(df写入sheet)和read_sheet(读取sheet为df)这2个API
     """
-    def __init__(self, spreadsheet_token=None, user_access_token=None, config_key=None):
+    def __init__(self, spreadsheet_token=None, user_access_token=None):
         """
         若1个文档要操作多次，建议为其专门初始化一个实例(在初始化时指定spreadsheet_token)
         若有多个文档，每个文档只操作一两次，建议先初始化1个公共实例，在操作具体每个文档时再指定spreadsheet_token
@@ -66,7 +66,7 @@ class SpreadSheet(object):
         :param user_access_token:
         """
         if user_access_token is None:
-            self.idt = Identification(config_key=config_key)
+            self.idt = Identification()
             user_access_token = self.idt.user_access_token
         self.user_access_token = user_access_token
         self.headers = get_headers(self.user_access_token)
