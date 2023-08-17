@@ -70,8 +70,8 @@ idt.init_with_code(code)
 ```python
 from feishu import SpreadSheet
 spsh = SpreadSheet()
-df = spsh.read_sheet(spreadsheet_token='xxx1', sheet='xxx', cell_start='B1', cell_end='F501') # 读取sheet，范围是B1:F501
-spsh.write_df(df, spreadsheet_token='xxx2', sheet='xxx', cell_start='D1')  # 写入sheet，从D1开始写，若cell_start是A1，可省略
+df = spsh.read_sheet(spreadsheet_token='xxx1', sheet='xxx', cell_start='B1', cell_end='F501') # 读取sheet，范围是B1:F501，强烈建议指定cell_start和cell_end
+spsh.write_df(df, spreadsheet_token='xxx2', sheet='xxx', cell_start='D1')  # 写入sheet，从D1开始写，若cell_start是A1，可省略，强烈建议指定cell_start
 ```
 
 主要是以上4行，下面是一些补充说明：

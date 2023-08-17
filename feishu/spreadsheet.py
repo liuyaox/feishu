@@ -587,7 +587,7 @@ class SpreadSheet(object):
         """
         调用read_range，读取某sheet中某区域的数据，可指定cell_start到cell_end，或xy_start到xy_end
         没指定区域的话，可自行判断所有有效区域，建议明确指定起始cell，尤其是cell_end
-        update: 20230801
+        update: 20230817
         :param spreadsheet_token:
         :param sheet:
         :param cell_start:
@@ -612,8 +612,8 @@ class SpreadSheet(object):
         if xy_end is None:                  # 若使用xy坐标，且没指定xy_end，则自行判断xy_end
             sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
             sheet_index = self.sheet_id2index[sheet_id]
-            sheet_info = self.sheets[sheet_index]
-            xy_end = (sheet_info['rowCount'] - 1, sheet_index['columnCount'] - 1)
+            grid_properties = self.sheets[sheet_index]['grid_properties']
+            xy_end = (grid_properties['row_count'] - 1, grid_properties['column_count'] - 1)
 
         x_start, y_start = xy_start
         x_end, y_end = xy_end
