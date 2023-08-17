@@ -58,7 +58,7 @@ class SpreadSheet(object):
     """
     操作SpreadSheet，暂时只需关注write_df(df写入sheet)和read_sheet(读取sheet为df)这2个API
     """
-    def __init__(self, spreadsheet_token=None, user_access_token=None):
+    def __init__(self, spreadsheet_token=None, user_access_token=None, config_key=None):
         """
         若1个文档要操作多次，建议为其专门初始化一个实例(在初始化时指定spreadsheet_token)
         若有多个文档，每个文档只操作一两次，建议先初始化1个公共实例，在操作具体每个文档时再指定spreadsheet_token
@@ -66,7 +66,7 @@ class SpreadSheet(object):
         :param user_access_token:
         """
         if user_access_token is None:
-            self.idt = Identification()
+            self.idt = Identification(config_key=config_key)
             user_access_token = self.idt.user_access_token
         self.user_access_token = user_access_token
         self.headers = get_headers(self.user_access_token)
@@ -587,7 +587,7 @@ class SpreadSheet(object):
         """
         调用read_range，读取某sheet中某区域的数据，可指定cell_start到cell_end，或xy_start到xy_end
         没指定区域的话，可自行判断所有有效区域，建议明确指定起始cell，尤其是cell_end
-        update: 20230801
+        update: 20230817
         :param spreadsheet_token:
         :param sheet:
         :param cell_start:
@@ -612,8 +612,8 @@ class SpreadSheet(object):
         if xy_end is None:                  # 若使用xy坐标，且没指定xy_end，则自行判断xy_end
             sheet_id = self.sheet_index2id.get(sheet, self.sheet_title2id.get(sheet, sheet))
             sheet_index = self.sheet_id2index[sheet_id]
-            sheet_info = self.sheets[sheet_index]
-            xy_end = (sheet_info['rowCount'] - 1, sheet_index['columnCount'] - 1)
+            grid_properties = self.sheets[sheet_index]['grid_properties']
+            xy_end = (grid_properties['row_count'] - 1, grid_properties['column_count'] - 1)
 
         x_start, y_start = xy_start
         x_end, y_end = xy_end
