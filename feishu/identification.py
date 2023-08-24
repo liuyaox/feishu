@@ -87,12 +87,14 @@ class Identification(object):
             'app_id': self.app_id,
             'app_secret': self.app_secret
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            self.app_access_token = resp['app_access_token']    # app_access_token每隔一段时间会变
-            self.app_access_token_expire = int(time.time()) + resp['expire'] - 120  # 最大有效期2小时  TODO 会不会影响使用？不会，及时用app_access_token获得user_access_xxx即可
-        else:
-            logger.error(f'Get App Access Token Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                self.app_access_token = resp['app_access_token']    # app_access_token每隔一段时间会变
+                self.app_access_token_expire = int(time.time()) + resp['expire'] - 120  # 最大有效期2小时  TODO 会不会影响使用？不会，及时用app_access_token获得user_access_xxx即可
+            else:
+                logger.error(f'Get App Access Token Failed: {resp}')
 
     def _get_id_url(self):
         """
@@ -131,22 +133,24 @@ class Identification(object):
             'grant_type': 'authorization_code',
             'code': self.code
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            data = resp['data']
-            self.user_access_token = data['access_token']
-            self.user_access_token_expire = int(time.time()) + data['expires_in'] - 120     # 提前2分钟，下同
-            self.user_refresh_token = data['refresh_token']                                 # 有效期30天
-            self.user_refresh_token_expire = int(time.time()) + data['refresh_expires_in'] - 120
-            self.user_open_id = data['open_id']
-            # self.user_id = data['user_id']
-            self.user_name = data['name']
-            self.user_en_name = data['en_name']
-            # self.user_email = data['email']
-            self._update_token(0)
-            print(f'Get User Info Successfully! data: \n{data}')
-        else:
-            print(f'Get User Info Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                data = resp['data']
+                self.user_access_token = data['access_token']
+                self.user_access_token_expire = int(time.time()) + data['expires_in'] - 120     # 提前2分钟，下同
+                self.user_refresh_token = data['refresh_token']                                 # 有效期30天
+                self.user_refresh_token_expire = int(time.time()) + data['refresh_expires_in'] - 120
+                self.user_open_id = data['open_id']
+                # self.user_id = data['user_id']
+                self.user_name = data['name']
+                self.user_en_name = data['en_name']
+                # self.user_email = data['email']
+                self._update_token(0)
+                print(f'Get User Info Successfully! data: \n{data}')
+            else:
+                print(f'Get User Info Failed: {resp}')
 
     def _update_token(self, code_times=0):
         """
@@ -190,21 +194,23 @@ class Identification(object):
             'grant_type': 'refresh_token',
             'refresh_token': self.user_refresh_token
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            data = resp['data']
-            self.user_access_token = data['access_token']
-            self.user_access_token_expire = int(time.time()) + data['expires_in'] - 120     # 提前2分钟，下同
-            self.user_refresh_token = data['refresh_token']                                 # 有效期30天
-            self.user_refresh_token_expire = int(time.time()) + data['refresh_expires_in'] - 120
-            self.user_open_id = data['open_id']
-            # self.user_id = data['user_id']
-            self.user_name = data['name']
-            self.user_en_name = data['en_name']
-            # self.user_email = data['email']
-            self._update_token(code_times)
-        else:
-            logger.error(f'Refresh User Access Token Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                data = resp['data']
+                self.user_access_token = data['access_token']
+                self.user_access_token_expire = int(time.time()) + data['expires_in'] - 120     # 提前2分钟，下同
+                self.user_refresh_token = data['refresh_token']                                 # 有效期30天
+                self.user_refresh_token_expire = int(time.time()) + data['refresh_expires_in'] - 120
+                self.user_open_id = data['open_id']
+                # self.user_id = data['user_id']
+                self.user_name = data['name']
+                self.user_en_name = data['en_name']
+                # self.user_email = data['email']
+                self._update_token(code_times)
+            else:
+                logger.error(f'Refresh User Access Token Failed: {resp}')
 
     def get_user_info_identification(self):
         """
@@ -215,11 +221,13 @@ class Identification(object):
         """
         headers = get_headers(self.user_access_token)
         url = f'{self.api_url}/authen/v1/user_info'
-        resp = requests.get(url, headers=headers).json()
-        if resp['code'] == 0:
-            return resp['data']
-        else:
-            logger.error(f'Get User Info Failed: {resp}')
+        resp = requests.get(url, headers=headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                return resp['data']
+            else:
+                logger.error(f'Get User Info Failed: {resp}')
 
 
 if __name__ == '__main__':
