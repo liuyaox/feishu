@@ -5,6 +5,7 @@ import re
 from tqdm import tqdm
 import pandas as pd
 import cv2
+import json
 
 from .identification import Identification
 from .feishu_util import get_headers
@@ -92,26 +93,30 @@ class SpreadSheet(object):
         update: 20230725
         """
         url = self.api_url_v3
-        resp = requests.get(url, headers=self.headers).json()
-        if resp['code'] == 0:
-            spreadsheet = resp['data']['spreadsheet']
-            self.title = spreadsheet['title']
-            self.owner_id = spreadsheet['owner_id']
-            self.spreadsheet_url = spreadsheet['url']
-        else:
-            logger.error(f'Get SpreadSheet Meta Info Failed: {resp}')
-            return
+        resp = requests.get(url, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                spreadsheet = resp['data']['spreadsheet']
+                self.title = spreadsheet['title']
+                self.owner_id = spreadsheet['owner_id']
+                self.spreadsheet_url = spreadsheet['url']
+            else:
+                logger.error(f'Get SpreadSheet Meta Info Failed: {resp}')
+                return
 
         url = f'{self.api_url_v3}/sheets/query'
-        resp = requests.get(url, headers=self.headers).json()
-        if resp['code'] == 0:
-            sheets = resp['data']['sheets']
-            self.sheets = {x['index']: x for x in sheets}
-            self.sheet_index2id = {val['index']: val['sheet_id'] for key, val in self.sheets.items()}
-            self.sheet_title2id = {val['title']: val['sheet_id'] for key, val in self.sheets.items()}
-            self.sheet_id2index = {val: key for key, val in self.sheet_index2id.items()}
-        else:
-            logger.error(f'Get SpreadSheet Sheets Meta Info Failed: {resp}')
+        resp = requests.get(url, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                sheets = resp['data']['sheets']
+                self.sheets = {x['index']: x for x in sheets}
+                self.sheet_index2id = {val['index']: val['sheet_id'] for key, val in self.sheets.items()}
+                self.sheet_title2id = {val['title']: val['sheet_id'] for key, val in self.sheets.items()}
+                self.sheet_id2index = {val: key for key, val in self.sheet_index2id.items()}
+            else:
+                logger.error(f'Get SpreadSheet Sheets Meta Info Failed: {resp}')
 
     def _change_title(self, title):
         """
@@ -125,10 +130,12 @@ class SpreadSheet(object):
         body = {
             'title': title
         }
-        resp = requests.patch(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            self.title = title
-        return resp
+        resp = requests.patch(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                self.title = title
+            return resp
 
     def create_spreadsheet(self, folder_token, title=None):
         """
@@ -144,20 +151,22 @@ class SpreadSheet(object):
             'title': title,
             'folder_token': folder_token
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            spreadsheet = resp['data']['spreadsheet']
-            self.folder_token = spreadsheet['folder_token']
-            spreadsheet_token = spreadsheet['spreadsheet_token']
-            spreadsheet_url = spreadsheet['url']
-            self._set_spreadsheet_token(spreadsheet_token)
-            return {
-                'spreadsheet_token': spreadsheet_token,
-                'spreadsheet_url': spreadsheet_url,
-                'sheet_token': self.sheet_index2id[0]
-            }
-        else:
-            logger.error(f'Add SpreadSheet Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                spreadsheet = resp['data']['spreadsheet']
+                self.folder_token = spreadsheet['folder_token']
+                spreadsheet_token = spreadsheet['spreadsheet_token']
+                spreadsheet_url = spreadsheet['url']
+                self._set_spreadsheet_token(spreadsheet_token)
+                return {
+                    'spreadsheet_token': spreadsheet_token,
+                    'spreadsheet_url': spreadsheet_url,
+                    'sheet_token': self.sheet_index2id[0]
+                }
+            else:
+                logger.error(f'Add SpreadSheet Failed: {resp}')
 
     def _query_sheet(self, sheet):
         """
@@ -190,16 +199,18 @@ class SpreadSheet(object):
                 }
             }]
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            self._update_meta_info()
-            properties = list(resp['data']['replies'][0].values())[0]['properties']
-            sheet_id, title, index = properties['sheetId'], properties['title'], properties['index']
-            logger.info(f'Add Sheet Successfully: index={index}, sheet_id={sheet_id}, title={title}')
-            return sheet_id, index
-        else:
-            logger.error(f'Add Sheet Failed: {resp}')
-            return None, None
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                self._update_meta_info()
+                properties = list(resp['data']['replies'][0].values())[0]['properties']
+                sheet_id, title, index = properties['sheetId'], properties['title'], properties['index']
+                logger.info(f'Add Sheet Successfully: index={index}, sheet_id={sheet_id}, title={title}')
+                return sheet_id, index
+            else:
+                logger.error(f'Add Sheet Failed: {resp}')
+                return None, None
 
     def _copy_sheet(self, title, sheet=0):
         """
@@ -224,16 +235,18 @@ class SpreadSheet(object):
                 }
             }]
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            self._update_meta_info()
-            properties = list(resp['data']['replies'][0].values())[0]['properties']
-            sheet_id, title, index = properties['sheetId'], properties['title'], properties['index']
-            logger.info(f'Copy Sheet Successfully: index={index}, sheet_id={sheet_id}, title={title}')
-            return sheet_id, index
-        else:
-            logger.error(f'Copy Sheet Failed: {resp}')
-            return None, None
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                self._update_meta_info()
+                properties = list(resp['data']['replies'][0].values())[0]['properties']
+                sheet_id, title, index = properties['sheetId'], properties['title'], properties['index']
+                logger.info(f'Copy Sheet Successfully: index={index}, sheet_id={sheet_id}, title={title}')
+                return sheet_id, index
+            else:
+                logger.error(f'Copy Sheet Failed: {resp}')
+                return None, None
 
     def _delete_sheet(self, sheet=0):
         """
@@ -252,15 +265,17 @@ class SpreadSheet(object):
                 }
             }]
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            info = list(resp['data']['replies'][0].values())[0]
-            result, sheet_id = info['result'], info['sheetId']
-            if result:
-                self._update_meta_info()
-                logger.info(f'Delete Sheet Successfully: sheet_id={sheet_id}')
-        else:
-            logger.error(f'Delete Sheet Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                info = list(resp['data']['replies'][0].values())[0]
+                result, sheet_id = info['result'], info['sheetId']
+                if result:
+                    self._update_meta_info()
+                    logger.info(f'Delete Sheet Successfully: sheet_id={sheet_id}')
+            else:
+                logger.error(f'Delete Sheet Failed: {resp}')
 
     def _change_sheet(self, sheet, title=None, index=None, hidden=None, lock=None, users=None):
         """
@@ -295,13 +310,15 @@ class SpreadSheet(object):
                 }
             }]
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            self._update_meta_info()
-            logger.info(f'Change Sheet Meta Info Successfully: sheet_id={sheet_id}, title={title}, index={index}, '
-                        f'hidden={hidden}, lock={lock}, users={users}')
-        else:
-            logger.error(f'Change Sheet Meta Info Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                self._update_meta_info()
+                logger.info(f'Change Sheet Meta Info Successfully: sheet_id={sheet_id}, title={title}, index={index}, '
+                            f'hidden={hidden}, lock={lock}, users={users}')
+            else:
+                logger.error(f'Change Sheet Meta Info Failed: {resp}')
 
     def _prepend_data(self, cell_start, cell_end, values, sheet=0, update=True):
         """
@@ -323,18 +340,20 @@ class SpreadSheet(object):
                 'values': values
             }
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            if update:
-                self._update_meta_info()
-            data = resp['data']
-            table_range, revision, updates = data['tableRange'], data['revision'], data['updates']
-            range, cells = updates['updatedRange'], updates['updatedCells']
-            rows, columns = updates['updatedRows'], updates['updatedColumns']
-            logger.info(f'Prepend Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
-            return range
-        else:
-            logger.error(f'Prepend Data Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                if update:
+                    self._update_meta_info()
+                data = resp['data']
+                table_range, revision, updates = data['tableRange'], data['revision'], data['updates']
+                range, cells = updates['updatedRange'], updates['updatedCells']
+                rows, columns = updates['updatedRows'], updates['updatedColumns']
+                logger.info(f'Prepend Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+                return range
+            else:
+                logger.error(f'Prepend Data Failed: {resp}')
 
     def _append_data(self, cell_start, cell_end, values, sheet=0, option='OVERWRITE', update=True):
         """
@@ -360,20 +379,22 @@ class SpreadSheet(object):
                 'values': values
             }
         }
-        resp = requests.post(url, params=params, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            if update:
-                self._update_meta_info()
-            data = resp['data']
-            table_range, revision, updates = data['tableRange'], data['revision'], data['updates']
-            range, cells = updates['updatedRange'], updates['updatedCells']
-            rows, columns = updates['updatedRows'], updates['updatedColumns']
-            if FEISHU_VERBOSE in ['spreadsheet', 'all']:
-                print(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
-            logger.info(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
-            return range
-        else:
-            logger.error(f'Append Data Failed: {resp}')
+        resp = requests.post(url, params=params, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                if update:
+                    self._update_meta_info()
+                data = resp['data']
+                table_range, revision, updates = data['tableRange'], data['revision'], data['updates']
+                range, cells = updates['updatedRange'], updates['updatedCells']
+                rows, columns = updates['updatedRows'], updates['updatedColumns']
+                if FEISHU_VERBOSE in ['spreadsheet', 'all']:
+                    print(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+                logger.info(f'Append Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+                return range
+            else:
+                logger.error(f'Append Data Failed: {resp}')
 
     def _write_range(self, cell_start, cell_end, values, sheet=0, update=True):
         """
@@ -395,17 +416,30 @@ class SpreadSheet(object):
                 'values': values
             }
         }
-        resp = requests.put(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            if update:
-                self._update_meta_info()
-            data = resp['data']
-            range, cells = data['updatedRange'], data['updatedCells']
-            rows, columns = data['updatedRows'], data['updatedColumns']
-            logger.info(f'Write Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
-            return range
-        else:
-            logger.error(f'Write Data Failed: {resp}')
+        resp = requests.put(url, json=body, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                if update:
+                    self._update_meta_info()
+                data = resp['data']
+                range, cells = data['updatedRange'], data['updatedCells']
+                rows, columns = data['updatedRows'], data['updatedColumns']
+                logger.info(f'Write Data Successfully: range={range}, {rows} rows, {columns} columns, {cells} cells')
+                return range
+            else:
+                logger.error(f'Write Data Failed: {resp}')
+
+    def _write_cell(self, cell, value, sheet=0, update=True):
+        """
+        向单个单元格写入数据
+        :param cell:
+        :param value:
+        :param sheet:
+        :param update:
+        :return:
+        """
+        self._write_range(cell_start=cell, cell_end=cell, values=[[value]], sheet=sheet, update=update)
 
     def _read_range(self, cell_start, cell_end, sheet=0):
         """
@@ -423,13 +457,15 @@ class SpreadSheet(object):
             'valueRenderOption': 'ToString',            # 先ToString再读取，否则对于包含url的cell，会按FormattedValue来读取?
             'dateTimeRenderOption': 'FormattedString'
         }
-        resp = requests.get(url, params=params, headers=self.headers).json()
-        if resp['code'] == 0:
-            values = resp['data']['valueRange']['values']
-            return values
-        else:
-            logger.error(f'Read Range Failed: {resp}')
-            return None
+        resp = requests.get(url, params=params, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                values = resp['data']['valueRange']['values']
+                return values
+            else:
+                logger.error(f'Read Range Failed: {resp}')
+                return None
 
     def _read_ranges(self, cells, sheet=0):
         """
@@ -447,15 +483,17 @@ class SpreadSheet(object):
             'valueRenderOption': 'ToString',
             'dateTimeRenderOption': 'FormattedString'
         }
-        resp = requests.get(url, params=params, headers=self.headers).json()
-        if resp['code'] == 0:
-            data = resp['data']
-            value_ranges, total_cells = data['valueRange'], data['totalCells']
-            range2values = {x['range']: x['values'] for x in value_ranges}
-            return range2values
-        else:
-            logger.error(f'Read Ranges Failed: {resp}')
-            return None
+        resp = requests.get(url, params=params, headers=self.headers)
+        if resp.status_code == 200:
+            resp = resp.json()
+            if resp['code'] == 0:
+                data = resp['data']
+                value_ranges, total_cells = data['valueRange'], data['totalCells']
+                range2values = {x['range']: x['values'] for x in value_ranges}
+                return range2values
+            else:
+                logger.error(f'Read Ranges Failed: {resp}')
+                return None
 
     def _write_image(self, cell, image=None, image_path=None, image_type=None, name=None, sheet=0, update=True):
         """
@@ -482,14 +520,16 @@ class SpreadSheet(object):
             'image': image,
             'name': name if name else f'test.{image_type}'
         }
-        resp = requests.post(url, json=body, headers=self.headers).json()
-        if resp['code'] == 0:
-            if update:
-                self._update_meta_info()
-            range = resp['data']['updateRange']
-            return range
-        else:
-            logger.error(f'Write Image Failed: {resp}')
+        resp = requests.post(url, json=body, headers=self.headers)
+        if resp.status_code == 200:         # 需要先判断status_code为200，才能使用json()函数，否则会报错，其他地方同理
+            resp = resp.json()
+            if resp['code'] == 0:
+                if update:
+                    self._update_meta_info()
+                range = resp['data']['updateRange']
+                return range
+            else:
+                logger.error(f'Write Image Failed: {resp}')
 
     def write_image(self, image_paths, spreadsheet_token=None, sheet=0, cell_start='A1', axis='column', update=True):
         """
@@ -516,8 +556,11 @@ class SpreadSheet(object):
             cells = [xy_to_cell(x_start, y_start + i) for i in range(len(image_paths))]
             next_cell_start = xy_to_cell(x_start, y_start + len(image_paths))
 
-        for cell, image_path in tqdm(zip(cells, image_paths)):
-            self._write_image(cell, image_path=image_path, sheet=sheet, update=False)
+        for cell, image_path in tqdm(zip(cells, image_paths), total=len(cells)):
+            if os.path.exists(image_path):
+                self._write_image(cell, image_path=image_path, sheet=sheet, update=False)
+            else:
+                self._write_cell(cell, value=f'{image_path} not found', sheet=sheet, update=False)
         if update:
             self._update_meta_info()  # 写完所有数据后再update
 
@@ -560,7 +603,7 @@ class SpreadSheet(object):
         letter_end, row_end = re.findall(PATTERN, cell_end)[0]
         row_end = int(row_end)
         values = [list(df.columns)]
-        for _, se in tqdm(df.iterrows()):
+        for _, se in tqdm(df.iterrows(), total=df.shape[0]):
             values.append(se.to_list())
             if len(values) == max_num:      # 每次只写max_num行
                 logger.info(f'Range: {cell_start}, {cell_end}')
