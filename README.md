@@ -1,4 +1,4 @@
-# feishu
+# Feishu
 
 飞书文档Python API: 当前主要是SpreadSheet，用于读写飞书表格
 
@@ -20,10 +20,13 @@ export PYTHONPATH=$PYTHONPATH:<YOUR_DIRECTORY>/feishu
 export FEISHU_APP_ID="xxx"
 export FEISHU_APP_SECRET="xxx"
 export FEISHU_REDIRECT_URI="xxx"
-export FEISHU_CONFIG_KEY="yao.liu"    # 修改为你自己的名字
+export FEISHU_CONFIG_KEY="yao.liu"    # 修改为你自己的飞书账号
 ```
 
-以上xxx具体取值，详见文档 [feishu环境变量配置](https://rg975ojk5z.feishu.cn/docx/BLXrdah64oylNBxHieYcXKndnkd)
+以上xxx具体取值:
+- 与我在同一单位的同学：详见文档 [feishu环境变量配置](https://rg975ojk5z.feishu.cn/docx/BLXrdah64oylNBxHieYcXKndnkd)
+- 其他同学：需要先创建所在单位的"企业自建应用"（以获取app_id和app_secret），详见开发者后台：https://open.feishu.cn/app
+
 
 ## 初始化（飞书授权并保存相关token）
 
