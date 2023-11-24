@@ -4,7 +4,7 @@ import os
 
 
 # 简单配置中心：我是在公司内网一个公共服务器上用FastAPI开个服务，用字典和pickle来读写配置数据，后续要修改。可以使用任意配置中心
-CONFIG_SERVICE_IP = os.environ['FEISHU_CONFIG_IP']
+CONFIG_SERVICE_IP = os.environ['CONFIG_SERVICE_IP']
 URL_FEISHU = f'http://{CONFIG_SERVICE_IP}:8000/config/feishu'
 HEADERS = {
     'Content-Type': 'application/json'
